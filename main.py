@@ -25,6 +25,8 @@ class Node:
         self.value =  value
         self.x = x
         self.y = y
+        self.parent: Optional[Node] = None
+        self.cost = float('inf')
 
     def __repr__(self):
         return f"<Node value={self.value} position=({self.x}, {self.y})>"
@@ -74,8 +76,10 @@ class Grid(Mapping):
         except IndexError:
             raise KeyError
 
-    def __iter__(self) -> Iterator[Node]:
-        return iter(self.nodes)
+    def __iter__(self) -> Iterator[Point]:
+        for y in range(self.height):
+            for x in range(self.width):
+                yield (x, y)
 
     def __len__(self):
         return len(self.nodes)
@@ -99,7 +103,7 @@ class Grid(Mapping):
     def diagonals(self, node: Node) -> Iterator[Node]:
         return self.neighbours(node, Directions.diagonals)
 
-    def adjacent(self, node: Node) -> Iterator[Optional[Node]]:
+    def adjacent(self, node: Node) -> Iterator[Node]:
         return self.neighbours(node, Directions.adjacent)
 
     @staticmethod
@@ -109,18 +113,21 @@ class Grid(Mapping):
     def traversable(self, node: Node) -> bool:
         return node.value != '#'
 
+    def clear_nodes(self):
+        for node in self.nodes:
+            node.parent = None
+            node.cost = float('inf')
+
     def astar(self, start: Node, goal: Node) -> list[Node]:
         '''
         Returns the shortest path from start to goal using A* algorithm
         '''
-        # first is the node it came from, second is its G+H cost
-        already_visited: dict[Node, tuple[Node, float]] = {
-            start: (None, self.distance(start, goal))
-        }
-        to_visit: dict[Node, tuple[Node, float]] = {
-            start: (None, self.distance(start, goal))
-        }
-        path = []
+        self.clear_nodes()
+        already_visited: set[Node] = set()
+        start.parent = None
+        start.cost = self.distance(start, goal)
+        to_visit: set[Node] = {start}
+        path: list[Node] = []
         def debug():
             ret = ""
             for y in range(self.height):
@@ -143,7 +150,20 @@ class Grid(Mapping):
         visiting = start
         while to_visit:
             debug()
-            nodes = self.cardinals(visiting)
+            visiting = min(to_visit, key=lambda x: x.cost)
+            already_visited.add(visiting)
+            to_visit.remove(visiting)
+            if visiting == goal:
+                path.append(visiting)
+                node = visiting
+                while True:
+                    node = node.parent
+                    if node is None:
+                        break
+                    path.append(node)
+                    debug()
+                return list(reversed(path))
+            nodes = self.adjacent(visiting)
             for node in nodes:
                 if not self.traversable(node):
                     continue
@@ -152,31 +172,19 @@ class Grid(Mapping):
                 g_cost = self.distance(visiting, node)
                 h_cost = self.distance(goal, node)
                 cost = g_cost + h_cost
-                old_node = to_visit.get(node)
-                if old_node and old_node[1] < cost:
+                if node.cost < cost:
                     continue
-                to_visit[node] = (visiting, cost)
-            visiting = min(to_visit, key=lambda x: to_visit[x][1])
-            already_visited[visiting] = to_visit[visiting]
-            del to_visit[visiting]
-            if visiting == goal:
-                path.append(visiting)
-                node = visiting
-                while True:
-                    node = already_visited[node][0]
-                    if node is None:
-                        break
-                    path.append(node)
-                    debug()
-                return list(reversed(path))
+                node.parent = visiting
+                node.cost = cost
+                to_visit.add(node)
         return path
 
 
 
 data = '''
 ..........
-...#.B....
-....#.....
+.....B....
+..........
 .#########
 ..........
 #########.
