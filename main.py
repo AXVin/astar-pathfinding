@@ -169,7 +169,7 @@ class Grid(Mapping):
                     continue
                 if node in already_visited:
                     continue
-                g_cost = self.distance(visiting, node)
+                g_cost = self.distance(start, visiting) + self.distance(start, node)
                 h_cost = self.distance(goal, node)
                 cost = g_cost + h_cost
                 if node.cost < cost:
